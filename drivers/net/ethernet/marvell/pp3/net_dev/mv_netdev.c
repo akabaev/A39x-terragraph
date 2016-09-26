@@ -3270,9 +3270,14 @@ static int mv_pp3_tx(struct sk_buff *skb, struct net_device *dev)
 	cfh->plen_order = MV_CFH_PKT_LEN_SET(pkt_len + MV_PP3_CFH_MDATA_SIZE) |
 				MV_CFH_REORDER_SET(REORD_NEW) | MV_CFH_LAST_BIT_SET;
 
-	cfh->ctrl = MV_CFH_RD_SET(rd_offs + MV_PP3_CFH_PAYLOAD_MAX_SIZE) |
-			MV_CFH_LEN_SET(cfh_size) | MV_CFH_MDATA_BIT_SET |
-			MV_CFH_MODE_SET(HMAC_CFH) | MV_CFH_PP_MODE_SET(PP_TX_PACKET_NSS);
+	if (pkt_in_cfh)
+		cfh->ctrl = MV_CFH_RD_SET(rd_offs + pkt_len) |
+				MV_CFH_LEN_SET(cfh_size) | MV_CFH_MDATA_BIT_SET |
+				MV_CFH_MODE_SET(HMAC_CFH) | MV_CFH_PP_MODE_SET(PP_TX_PACKET_NSS);
+	else
+		cfh->ctrl = MV_CFH_RD_SET(rd_offs + MV_PP3_CFH_PAYLOAD_MAX_SIZE) |
+				MV_CFH_LEN_SET(cfh_size) | MV_CFH_MDATA_BIT_SET |
+				MV_CFH_MODE_SET(HMAC_CFH) | MV_CFH_PP_MODE_SET(PP_TX_PACKET_NSS);
 
 	l3_l4_info = mv_pp3_skb_tx_csum(skb, cpu_vp);
 
@@ -3282,27 +3287,14 @@ static int mv_pp3_tx(struct sk_buff *skb, struct net_device *dev)
 		cfh->ctrl |= MV_CFH_QC_BIT_SET;
 	}
 
-	if (pkt_in_cfh) {
-		/* CFH store packet data, pdata point to start point of payload data in cfh */
-		txdone_todo = 0;
-		ppool = NULL;
-		cfh->vm_bp = cfh->marker_l = cfh->phys_l = 0;
-
-		cfh->ctrl &= ~MV_CFH_RD_MASK;
-
-		/* TODO - add skb recycle support */
-		mv_pp3_skb_free(dev, skb);
-		STAT_DBG(cpu_vp->port.cpu.stats.tx_cfh_pkt++);
-	} else {
-		ppool = cpu_vp->port.cpu.cpu_shared->txdone_pool;
-		cfh->vm_bp = MV_CFH_BPID_SET(ppool->pool);
-		txdone_todo = PPOOL_BUF_TXDONE(ppool, cpu);
-		txdone_todo++;
-		cfh->marker_l = (unsigned int)skb;
-		/* Flush Cache */
-		cfh->phys_l = mv_pp3_os_dma_map_single(dev->dev.parent, skb->head,
-					       pkt_len + rd_offs, DMA_TO_DEVICE);
-	}
+	ppool = cpu_vp->port.cpu.cpu_shared->txdone_pool;
+	cfh->vm_bp = MV_CFH_BPID_SET(ppool->pool);
+	txdone_todo = PPOOL_BUF_TXDONE(ppool, cpu);
+	txdone_todo++;
+	cfh->marker_l = (unsigned int)skb;
+	/* Flush Cache */
+	cfh->phys_l = mv_pp3_os_dma_map_single(dev->dev.parent, skb->head,
+				       pkt_len + rd_offs, DMA_TO_DEVICE);
 	cfh->tag1 = MV_CFH_ADD_CRC_BIT_SET | MV_CFH_L2_PAD_BIT_SET;
 
 #ifdef CONFIG_MV_PP3_DEBUG_CODE
