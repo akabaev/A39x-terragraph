@@ -595,29 +595,6 @@ static void pxa3xx_nand_start(struct pxa3xx_nand_info *info)
 	nand_writel(info, NDCR, ndcr);
 }
 
-static void pxa3xx_nand_stop(struct pxa3xx_nand_info *info)
-{
-	uint32_t ndcr;
-	int timeout = NAND_STOP_DELAY;
-
-	/* wait RUN bit in NDCR become 0 */
-	ndcr = nand_readl(info, NDCR);
-	while ((ndcr & NDCR_ND_RUN) && (timeout-- > 0)) {
-		ndcr = nand_readl(info, NDCR);
-		udelay(1);
-	}
-
-	if (timeout <= 0) {
-		ndcr &= ~NDCR_ND_RUN;
-		nand_writel(info, NDCR, ndcr);
-	}
-	if (info->dma_chan)
-		dmaengine_terminate_all(info->dma_chan);
-
-	/* clear status bits */
-	nand_writel(info, NDSR, NDSR_MASK);
-}
-
 static void __maybe_unused
 enable_int(struct pxa3xx_nand_info *info, uint32_t int_mask)
 {
@@ -1172,12 +1149,7 @@ static void nand_cmdfunc(struct mtd_info *mtd, unsigned command,
 		info->need_wait = 1;
 		pxa3xx_nand_start(info);
 
-		if (!wait_for_completion_timeout(&info->cmd_complete,
-		    CHIP_DELAY_TIMEOUT)) {
-			dev_err(&info->pdev->dev, "Wait time out!!!\n");
-			/* Stop State Machine for next command cycle */
-			pxa3xx_nand_stop(info);
-		}
+		wait_for_completion(&info->cmd_complete);
 	}
 	info->state = STATE_IDLE;
 }
@@ -1253,13 +1225,7 @@ static void nand_cmdfunc_extended(struct mtd_info *mtd,
 		init_completion(&info->cmd_complete);
 		pxa3xx_nand_start(info);
 
-		if (!wait_for_completion_timeout(&info->cmd_complete,
-		    CHIP_DELAY_TIMEOUT)) {
-			dev_err(&info->pdev->dev, "Wait time out!!!\n");
-			/* Stop State Machine for next command cycle */
-			pxa3xx_nand_stop(info);
-			break;
-		}
+		wait_for_completion(&info->cmd_complete);
 
 		/* Only a few commands need several steps */
 		if (command != NAND_CMD_PAGEPROG &&
@@ -1404,11 +1370,7 @@ static int pxa3xx_nand_waitfunc(struct mtd_info *mtd, struct nand_chip *this)
 
 	if (info->need_wait) {
 		info->need_wait = 0;
-		if (!wait_for_completion_timeout(&info->dev_ready,
-		    CHIP_DELAY_TIMEOUT)) {
-			dev_err(&info->pdev->dev, "Ready time out!!!\n");
-			return NAND_STATUS_FAIL;
-		}
+		wait_for_completion(&info->dev_ready);
 	}
 
 	/* pxa3xx_nand_send_command has waited for command complete */
