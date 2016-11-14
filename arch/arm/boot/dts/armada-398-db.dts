@@ -45,6 +45,8 @@
  */
 
 /dts-v1/;
+/memreserve/ 0x00000000 0x00004000;  /* 16kB reserved for NSS/HW */
+
 #include "armada-398.dtsi"
 
 / {
