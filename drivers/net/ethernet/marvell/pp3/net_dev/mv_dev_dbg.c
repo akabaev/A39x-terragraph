@@ -294,7 +294,11 @@ void pp3_dbg_egress_vqs_print(struct net_device *dev)
 /*TODO: currently print only HWQ - improve this function */
 static void pp3_dbg_dev_emacs_resources_line_dump(struct pp3_vport *emac_vp)
 {
-	int i;
+	int q, anode, bnode, pnode;
+	char queues[64];
+	char anodes[64];
+	char bnodes[64];
+	char tmp[16];
 
 	pr_info("\n");
 	pr_info("emac%d:  TX%-35s", emac_vp->vport, "");
@@ -303,20 +307,43 @@ static void pp3_dbg_dev_emacs_resources_line_dump(struct pp3_vport *emac_vp)
 	if (!(emac_vp->port.emac.flags & BIT(MV_PP3_EMAC_F_INIT_BIT)))
 		return;
 
-	for (i = 0; i < emac_vp->tx_vqs_num; i++) {
-		if (!(emac_vp->tx_vqs[i]))
+	memset(queues, 0, sizeof(queues));
+	memset(anodes, 0, sizeof(anodes));
+	memset(bnodes, 0, sizeof(bnodes));
+	for (q = 0; (q < emac_vp->tx_vqs_num) && (q < 4); q++) {
+		if (!(emac_vp->tx_vqs[q]))
 			continue;
-
-		pr_cont("%-3d ", emac_vp->tx_vqs[i]->hwq);
+		sprintf(tmp, "%d ", emac_vp->tx_vqs[q]->hwq);
+		strcat(queues, tmp);
+		if (mv_tm_scheme_queue_path_get(emac_vp->tx_vqs[q]->hwq, &anode, &bnode, NULL, &pnode))
+			return;
+		sprintf(tmp, "%d ", anode);
+		strcat(anodes, tmp);
+		sprintf(tmp, "%d ", bnode);
+		strcat(bnodes, tmp);
 	}
+	pr_cont("%-16s %-14s %-10s %2d (emac%d)  %-4s",
+		queues, anodes, bnodes, pnode, emac_vp->vport, "NA");
+
 	pr_info("        RX%-35s", "");
 
-	for (i = 0; i < emac_vp->rx_vqs_num; i++) {
-		if (!(emac_vp->rx_vqs[i]))
+	memset(queues, 0, sizeof(queues));
+	memset(anodes, 0, sizeof(anodes));
+	memset(bnodes, 0, sizeof(bnodes));
+	for (q = 0; (q < emac_vp->rx_vqs_num) && (q < 4); q++) {
+		if (!(emac_vp->rx_vqs[q]))
 			continue;
-
-		pr_cont("%-3d ", emac_vp->rx_vqs[i]->hwq);
+		sprintf(tmp, "%d ", emac_vp->rx_vqs[q]->hwq);
+		strcat(queues, tmp);
+		if (mv_tm_scheme_queue_path_get(emac_vp->rx_vqs[q]->hwq, &anode, &bnode, NULL, &pnode))
+			return;
+		sprintf(tmp, "%d ", anode);
+		strcat(anodes, tmp);
+		sprintf(tmp, "%d ", bnode);
+		strcat(bnodes, tmp);
 	}
+	pr_cont("%-16s %-14s %-10s %2d (emac%d)  %-4s",
+		queues, anodes, bnodes, pnode, emac_vp->vport, "NA");
 }
 
 /*---------------------------------------------------------------------------
@@ -350,7 +377,7 @@ static void pp3_dbg_dev_channel_resources_dump(void)
 {
 	struct mv_pp3_channel *chan_ctrl;
 	int i, j, chan_num;
-	int node, cpu;
+	int anode, bnode, cpu;
 	char cpu_str[20], tmp[3];
 
 	chan_num = mv_pp3_chan_num_get();
@@ -358,12 +385,15 @@ static void pp3_dbg_dev_channel_resources_dump(void)
 	for (i = 0; i < chan_num; i++) {
 		chan_ctrl = mv_pp3_chan_get(i);
 
-		mv_pp3_cfg_hmac_tx_anode_get(chan_ctrl->hmac_hw_txq, &node);
+		if (mv_tm_scheme_queue_path_get(chan_ctrl->hmac_hw_txq, &anode, &bnode, NULL, NULL))
+			return;
+
 		pr_info("\n");
 		pr_info("chan%d:  TX   ", i);
-		pr_cont("%-4s %-5s %-6d %-6s %-6d %-32d %-28d %2d (ppc0)   %-4s", "NA", "NA", chan_ctrl->frame, "NA",
-				chan_ctrl->hmac_sw_txq, chan_ctrl->hmac_hw_txq, node,
-				mv_pp3_cfg_hmac_pnode_get(PP3_PPC0_DP), "NA");
+		pr_cont("%-4s %-5s %-6d %-6s %-6d %-16d %-14d %-10d %2d (ppc0)   %-4s", "NA", "NA",
+			chan_ctrl->frame, "NA",
+			chan_ctrl->hmac_sw_txq, chan_ctrl->hmac_hw_txq, anode, bnode,
+			mv_pp3_cfg_hmac_pnode_get(PP3_PPC0_DP), "NA");
 		pr_info("%-8s", "");
 
 		j = 0;
@@ -377,10 +407,13 @@ static void pp3_dbg_dev_channel_resources_dump(void)
 			}
 		}
 
-		mv_pp3_cfg_hmac_rx_anode_get(chan_ctrl->hmac_hw_rxq, &node);
-		pr_cont("RX   %-4s %-5d %-6d %-6d %-6d %-32d %-28d %2d (hmac)   %-4s\n", cpu_str, chan_ctrl->irq_num,
-				chan_ctrl->frame, chan_ctrl->event_group, chan_ctrl->hmac_sw_rxq,
-				chan_ctrl->hmac_hw_rxq, node, mv_pp3_cfg_hmac_pnode_get(PP3_HMAC_RX), "NA");
+		if (mv_tm_scheme_queue_path_get(chan_ctrl->hmac_hw_rxq, &anode, &bnode, NULL, NULL))
+			return;
+
+		pr_cont("RX   %-4s %-5d %-6d %-6d %-6d %-16d %-14d %-10d %2d (hmac)   %-4s\n",
+			cpu_str, chan_ctrl->irq_num,
+			chan_ctrl->frame, chan_ctrl->event_group, chan_ctrl->hmac_sw_rxq,
+			chan_ctrl->hmac_hw_rxq, anode, bnode, mv_pp3_cfg_hmac_pnode_get(PP3_HMAC_RX), "NA");
 	}
 }
 
@@ -429,11 +462,12 @@ static void pp3_dbg_dev_bm_resources_dump(void)
 
 static void pp3_dbg_dev_rx_resources_line_dump(struct pp3_dev_priv *dev_priv)
 {
-	int cpu, q, node;
+	int cpu, q, anode, bnode;
 	bool first;
 	struct pp3_vport *cpu_vp;
 	char queues[64];
 	char anodes[64];
+	char bnodes[64];
 	char tmp[16];
 
 	pr_info("\n");
@@ -441,6 +475,7 @@ static void pp3_dbg_dev_rx_resources_line_dump(struct pp3_dev_priv *dev_priv)
 	for_each_possible_cpu(cpu) {
 		memset(queues, 0, sizeof(queues));
 		memset(anodes, 0, sizeof(anodes));
+		memset(bnodes, 0, sizeof(bnodes));
 
 		cpu_vp = dev_priv->cpu_vp[cpu];
 		if (!cpu_vp || !cpumask_test_cpu(cpu, &dev_priv->rx_cpus))
@@ -458,35 +493,42 @@ static void pp3_dbg_dev_rx_resources_line_dump(struct pp3_dev_priv *dev_priv)
 		pr_cont("%2d:%-2d ", cpu_vp->rx_vqs[0]->swq->swq, cpu_vp->rx_vqs[cpu_vp->rx_vqs_num-1]->swq->swq);
 
 		pr_cont("%-2s", "");
-		for (q = 0; (q < cpu_vp->rx_vqs_num) && (q < 8); q++) {
+		for (q = 0; (q < cpu_vp->rx_vqs_num) && (q < 4); q++) {
 			sprintf(tmp, "%d ", cpu_vp->rx_vqs[q]->hwq);
-
 			strcat(queues, tmp);
-			mv_pp3_cfg_hmac_rx_anode_get(cpu_vp->rx_vqs[q]->hwq, &node);
-			sprintf(tmp, "%d ", node);
+			if (mv_tm_scheme_queue_path_get(cpu_vp->rx_vqs[q]->hwq, &anode, &bnode, NULL, NULL))
+				return;
+
+			sprintf(tmp, "%d ", anode);
 			strcat(anodes, tmp);
+			sprintf(tmp, "%d ", bnode);
+			strcat(bnodes, tmp);
 		}
-		pr_cont("%-32s %-28s ", queues, anodes);
+		pr_cont("%-16s %-14s %-10s ", queues, anodes, bnodes);
 
 		/* TODO print pools per interface and not per group */
 		pr_cont("%2d (hmac)   %-2d (L) %-2d (S)", mv_pp3_cfg_hmac_pnode_get(PP3_HMAC_RX),
 			dev_priv->cpu_shared->long_pool ? dev_priv->cpu_shared->long_pool->pool : -1,
 			dev_priv->cpu_shared->short_pool ? dev_priv->cpu_shared->short_pool->pool : -1);
 
-		if (cpu_vp->rx_vqs_num > 8) {
+		if (cpu_vp->rx_vqs_num > 4) {
 			memset(queues, 0, sizeof(queues));
 			memset(anodes, 0, sizeof(anodes));
+			memset(bnodes, 0, sizeof(bnodes));
 
 			pr_info("%-45s", "");
-			for (q = 8; (q < cpu_vp->rx_vqs_num); q++) {
+			for (q = 4; (q < cpu_vp->rx_vqs_num); q++) {
 				sprintf(tmp, "%d ", cpu_vp->rx_vqs[q]->hwq);
-
 				strcat(queues, tmp);
-				mv_pp3_cfg_hmac_rx_anode_get(cpu_vp->rx_vqs[q]->hwq + q, &node);
-				sprintf(tmp, "%d ", node);
+				if (mv_tm_scheme_queue_path_get(cpu_vp->rx_vqs[q]->hwq, &anode, &bnode, NULL, NULL))
+					return;
+
+				sprintf(tmp, "%d ", anode);
 				strcat(anodes, tmp);
+				sprintf(tmp, "%d ", bnode);
+				strcat(bnodes, tmp);
 			}
-			pr_cont("%-32s %-28s ", queues, anodes);
+			pr_cont("%-16s %-14s %-10s ", queues, anodes, bnodes);
 		}
 	}
 }
@@ -494,12 +536,13 @@ static void pp3_dbg_dev_rx_resources_line_dump(struct pp3_dev_priv *dev_priv)
 
 static void pp3_dbg_dev_tx_resources_line_dump(struct pp3_dev_priv *dev_priv)
 {
-	int cpu, q, node;
+	int cpu, q, anode, bnode;
 	struct pp3_vport *cpu_vp;
 	struct pp3_pool *ppool;
 	bool first;
 	char queues[64];
 	char anodes[64];
+	char bnodes[64];
 	char tmp[16];
 
 	pr_info("\n");
@@ -507,6 +550,7 @@ static void pp3_dbg_dev_tx_resources_line_dump(struct pp3_dev_priv *dev_priv)
 	for_each_possible_cpu(cpu) {
 		memset(queues, 0, sizeof(queues));
 		memset(anodes, 0, sizeof(anodes));
+		memset(bnodes, 0, sizeof(bnodes));
 
 		cpu_vp = dev_priv->cpu_vp[cpu];
 		if (!cpu_vp)
@@ -524,14 +568,17 @@ static void pp3_dbg_dev_tx_resources_line_dump(struct pp3_dev_priv *dev_priv)
 
 		pr_cont("%-2s", "");
 
-		for (q = 0; (q < cpu_vp->tx_vqs_num) && (q < 8); q++) {
+		for (q = 0; (q < cpu_vp->tx_vqs_num) && (q < 4); q++) {
 			sprintf(tmp, "%d ", cpu_vp->tx_vqs[q]->hwq);
 			strcat(queues, tmp);
-			mv_pp3_cfg_hmac_tx_anode_get(cpu_vp->tx_vqs[q]->hwq, &node);
-			sprintf(tmp, "%d ", node);
+			if (mv_tm_scheme_queue_path_get(cpu_vp->tx_vqs[q]->hwq, &anode, &bnode, NULL, NULL))
+				return;
+			sprintf(tmp, "%d ", anode);
 			strcat(anodes, tmp);
+			sprintf(tmp, "%d ", bnode);
+			strcat(bnodes, tmp);
 		}
-		pr_cont("%-32s %-28s ", queues, anodes);
+		pr_cont("%-16s %-14s %-10s ", queues, anodes, bnodes);
 
 		ppool = dev_priv->cpu_shared->txdone_pool;
 
@@ -539,19 +586,23 @@ static void pp3_dbg_dev_tx_resources_line_dump(struct pp3_dev_priv *dev_priv)
 			mv_pp3_cfg_hmac_pnode_get(PP3_PPC0_DP),
 			ppool ? ppool->pool : -1);
 
-		if (cpu_vp->tx_vqs_num > 8) {
+		if (cpu_vp->tx_vqs_num > 4) {
 			memset(queues, 0, sizeof(queues));
 			memset(anodes, 0, sizeof(anodes));
+			memset(bnodes, 0, sizeof(bnodes));
 
 			pr_info("%-45s", "");
-			for (q = 8; (q < cpu_vp->tx_vqs_num); q++) {
+			for (q = 4; (q < cpu_vp->tx_vqs_num); q++) {
 				sprintf(tmp, "%d ", cpu_vp->tx_vqs[q]->hwq);
 				strcat(queues, tmp);
-				mv_pp3_cfg_hmac_tx_anode_get(cpu_vp->tx_vqs[q]->hwq, &node);
-				sprintf(tmp, "%d ", node);
+				if (mv_tm_scheme_queue_path_get(cpu_vp->tx_vqs[q]->hwq, &anode, &bnode, NULL, NULL))
+					return;
+				sprintf(tmp, "%d ", anode);
 				strcat(anodes, tmp);
+				sprintf(tmp, "%d ", bnode);
+				strcat(bnodes, tmp);
 			}
-			pr_cont("%-32s %-28s ", queues, anodes);
+			pr_cont("%-16s %-14s %-10s ", queues, anodes, bnodes);
 		}
 	}
 }
@@ -574,12 +625,12 @@ void pp3_dbg_dev_resources_dump(void)
 	pr_info("\n");
 	pr_info("------Linux----------");
 	pr_cont("   ------HMAC--------");
-	pr_cont("   -------------------QM--------------------------------------------------");
+	pr_cont("   -------------------QM------------------------------");
 	pr_cont("   -----BM------");
 	pr_info("\n");
 	pr_info("Name    Dir  CPU  IRQ");
 	pr_cont("   Frame  ISR   SWQs");
-	pr_cont("    HWQs                             A node                        P node ");
+	pr_cont("    HWQs             A node         B node      P node ");
 	pr_cont("    BM Pool");
 	for (i = 0; i < mv_pp3_dev_num_get(); i++) {
 		dev_priv = mv_pp3_dev_priv_get(i);
@@ -591,16 +642,16 @@ void pp3_dbg_dev_resources_dump(void)
 		pp3_dbg_dev_rx_resources_line_dump(dev_priv);
 	}
 	pr_info("-----------------------------------------------------------------------------------------------");
-	pr_cont("-------------------------------------\n");
+	pr_cont("-------------------\n");
 	pp3_dbg_dev_channel_resources_dump();
 	pr_info("-----------------------------------------------------------------------------------------------");
-	pr_cont("-------------------------------------\n");
+	pr_cont("-------------------\n");
 	pp3_dbg_dev_emacs_resources_dump();
 	pr_info("-----------------------------------------------------------------------------------------------");
-	pr_cont("-------------------------------------\n");
+	pr_cont("-------------------\n");
 	pp3_dbg_dev_bm_resources_dump();
 	pr_info("-----------------------------------------------------------------------------------------------");
-	pr_cont("-------------------------------------\n");
+	pr_cont("-------------------\n");
 }
 
 /*---------------------------------------------------------------------------*/
