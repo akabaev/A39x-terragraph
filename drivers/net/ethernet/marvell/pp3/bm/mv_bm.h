@@ -104,8 +104,8 @@ disclaimer.
 
 
 /*--------------------------- pools definitions --------------------------*/
-#define BM_TOT_AE				300 /* total almost empty threshold */
-#define BM_TOT_AAE				400 /* total almost almost empty threshold */
+#define BM_TOT_AE				600 /* total almost empty threshold */
+#define BM_TOT_AAE				700 /* total almost almost empty threshold */
 
 #define BM_QM_GPM_POOL_0			0
 #define BM_QM_GPM_POOL_1			1
