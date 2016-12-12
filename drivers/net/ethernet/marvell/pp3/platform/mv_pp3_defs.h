@@ -108,6 +108,35 @@
 /* number of CPUs * (number of RXQs per CPU * number of packets in each RXQ  + EXTRA */
 #define MV_PP3_RX_BUFS_EXTRA		2000
 
+/* Default ingress rate limit values for 10 Gbps EMAC */
+#define EMAC_10G_DEFAULT_CIR		3000
+#define EMAC_10G_DEFAULT_EIR		0
+#define EMAC_10G_DEFAULT_CBS		16
+#define EMAC_10G_DEFAULT_EBS		16
+
+/* Default priority for Host to PPC control traffic */
+#define PP3_CTRL_PRIO			7
+
+/* Default priority for Host to PPC control traffic */
+#define NIC_DEFAULT_PRIO_MIN		0
+
+/* Default minimal (vq0) priotriy for nss0 interface */
+#define NSS0_DEFAULT_PRIO_MIN		5
+
+/* Default rate limit values for egress traffic from nss0 interface */
+#define NSS0_DEFAULT_CIR		800
+#define NSS0_DEFAULT_EIR		0
+#define NSS0_DEFAULT_CBS		16
+#define NSS0_DEFAULT_EBS		16
+/* Default minimal (vq0) priotriy for nss16-23 interfaces */
+#define NSS_DEFAULT_PRIO_MIN		0
+
+/* Default rate limit values for egress traffic from nss16-23 interfaces */
+#define NSS_DEFAULT_CIR			2000
+#define NSS_DEFAULT_EIR			0
+#define NSS_DEFAULT_CBS			16
+#define NSS_DEFAULT_EBS			16
+
 /* PP3 queue type */
 enum mv_pp3_queue_type {
 	MV_PP3_EMAC_TO_PPC = 0,	/* relevant for emac_vport */

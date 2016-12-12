@@ -37,6 +37,7 @@
 
 #include "common/mv_sw_if.h"
 #include "common/mv_hw_if.h"
+#include "tm/mv_tm.h"
 #include "mv_a2m.h"
 #include "mv_pp3_defs.h"
 #include "mv_pp3_cfh.h"
@@ -58,6 +59,13 @@ struct mv_pp3 {
 };
 
 extern struct mv_pp3 *pp3_device;
+
+enum mv_pp3_dev_type {
+	MV_PP3_DEV_NIC = 0,
+	MV_PP3_DEV_NSS0,
+	MV_PP3_DEV_NSS,
+	MV_PP3_DEV_LAST
+};
 
 enum mv_pp3_timer_type {
 	MV_PP3_HRES_TIMER,
@@ -199,6 +207,7 @@ static inline int mv_pp3_irq_base_get(struct mv_pp3 *priv)
 }
 
 /* Function prorotypes */
+int mv_pp3_tm_meter_set(enum mv_tm_level level, int node, struct mv_nss_meter *meter);
 int mv_pp3_fdt_mac_address_get(struct device_node *np, unsigned char *mac_addr);
 int mv_pp3_ftd_mac_data_get(struct device_node *np, struct mv_mac_data *mac_data);
 struct mv_pp3_version *mv_pp3_get_driver_version(void);
@@ -211,5 +220,9 @@ int mv_pp3_nss_drain(struct mv_pp3 *priv);
 int mv_pp3_dp_q_find(u16 td, u16 red);
 void mv_pp3_dp_q_free(int dp_id);
 
+int mv_pp3_egress_emac_shaper_set(int emac, struct mv_nss_meter *meter);
+int mv_pp3_ingress_emac_rate_limit_set(int emac, struct mv_nss_meter *meter);
+struct mv_nss_meter *mv_pp3_dev_type_rate_limit_get(enum mv_pp3_dev_type dev_type);
+int mv_pp3_dev_type_rate_limit_set(enum mv_pp3_dev_type dev_type, struct mv_nss_meter *meter);
 
 #endif /* __mv_pp3_h__ */

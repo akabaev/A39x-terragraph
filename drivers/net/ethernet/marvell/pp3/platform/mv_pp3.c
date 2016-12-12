@@ -41,6 +41,9 @@
 #include "qm/mv_qm.h"
 #include "tm/mv_tm.h"
 #include "tm/wrappers/mv_tm_drop.h"
+#include "tm/wrappers/mv_tm_sched.h"
+#include "tm/wrappers/mv_tm_scheme.h"
+#include "tm/wrappers/mv_tm_shaping.h"
 #include "vport/mv_pp3_vport.h"
 #include "vport/mv_pp3_cpu.h"
 #include "msg/mv_pp3_msg_drv.h"
@@ -64,6 +67,30 @@ struct pp3_dp_ctrl {
 };
 
 bool coherency_hard_mode;
+
+static struct mv_nss_meter pp3_emac0_ingress_rate_limit = {
+	.cir = EMAC_10G_DEFAULT_CIR,
+	.eir = EMAC_10G_DEFAULT_EIR,
+	.cbs = EMAC_10G_DEFAULT_CBS,
+	.ebs = EMAC_10G_DEFAULT_EBS,
+	.enable = true,
+};
+
+static struct mv_nss_meter pp3_dev_nss0_egress_rate_limit = {
+	.cir = NSS0_DEFAULT_CIR,
+	.eir = NSS0_DEFAULT_EIR,
+	.cbs = NSS0_DEFAULT_CBS,
+	.ebs = NSS0_DEFAULT_EBS,
+	.enable = true,
+};
+
+static struct mv_nss_meter pp3_dev_nss_egress_rate_limit = {
+	.cir = NSS_DEFAULT_CIR,
+	.eir = NSS_DEFAULT_EIR,
+	.cbs = NSS_DEFAULT_CBS,
+	.ebs = NSS_DEFAULT_EBS,
+	.enable = true,
+};
 
 static u8   mv_pp3_dp_q_curve_id;
 static struct pp3_dp_ctrl mv_pp3_dp_q_ctrl[MV_TM_NUM_QUEUE_DROP_PROF];
@@ -165,6 +192,101 @@ void mv_pp3_dp_q_free(int dp_id)
 	}
 }
 /*---------------------------------------------------------------------------*/
+
+int mv_pp3_tm_meter_set(enum mv_tm_level level, int node, struct mv_nss_meter *meter)
+{
+	int rc, cbs_good, ebs_good;
+
+	cbs_good = meter->cbs;
+	ebs_good = meter->ebs;
+	rc = mv_tm_set_shaping_ex(level, node, meter->cir, meter->eir, &cbs_good, &ebs_good);
+	if (rc) {
+		if (meter->cbs != cbs_good) {
+			/* cbs value is too small. Use minimal valid value instead */
+			pr_warn("%s-%d: cbs = %d KBytes is too small for cir = %d. Use cbs = %d KBytes\n",
+				mv_tm_level_str(level), node, meter->cir, meter->cbs, cbs_good);
+			meter->cbs = cbs_good;
+		}
+
+		if (meter->ebs != ebs_good) {
+			/* ebs value is too small. Use minimal valid value instead */
+			pr_warn("%s-%d: ebs = %d KBytes is too small for eir = %d. Use ebs = %d KBytes\n",
+				mv_tm_level_str(level), node, meter->eir, meter->ebs, ebs_good);
+			meter->ebs = ebs_good;
+		}
+
+		rc = mv_tm_set_shaping_ex(level, node, meter->cir, meter->eir, &meter->cbs, &meter->ebs);
+		if (rc)
+			return rc;
+	}
+	return 0;
+}
+
+/* Set egress rate limit for group of interfaces nss0/nss16-23 - Bnode */
+int mv_pp3_dev_type_rate_limit_set(enum mv_pp3_dev_type dev_type, struct mv_nss_meter *meter)
+{
+	int rc, if_num, bnode, i, bnode_num;
+	struct mv_nss_meter *rate_limit;
+
+	if (dev_type == MV_PP3_DEV_NSS0) {
+		if_num = MV_NSS_EXT_PORT_MAX;
+		rate_limit = &pp3_dev_nss0_egress_rate_limit;
+	} else if (dev_type == MV_PP3_DEV_NSS) {
+		if_num = MV_NSS_EXT_PORT_MIN;
+		rate_limit = &pp3_dev_nss_egress_rate_limit;
+	} else {
+		pr_err("%s: device type %d not supported\n", __func__, dev_type);
+		return -1;
+	}
+	if (mv_pp3_shared_initialized(pp3_device)) {
+		bnode = mv_pp3_cfg_dp_tx_bnode_get(if_num, &bnode_num);
+		if (bnode == -1)
+			return -1;
+
+		for (i = 0; i < bnode_num; i++) {
+			rc  = mv_pp3_tm_meter_set(TM_B_LEVEL, bnode + i, meter);
+			if (rc)
+				return rc;
+		}
+	}
+	*rate_limit = *meter;
+
+	return 0;
+}
+
+int mv_pp3_ingress_emac_rate_limit_set(int emac, struct mv_nss_meter *meter)
+{
+	int rc, hwq, anode;
+
+	/* Set rate limit to the emac port - Anode */
+	rc = mv_pp3_cfg_emac_qm_params_get(emac, NULL, &hwq);
+	if (rc) {
+		pr_err("%s: Can't get ingress HWQ for emac #%d\n", __func__, emac);
+		return rc;
+	}
+
+	if (mv_tm_scheme_parent_node_get(TM_Q_LEVEL, hwq, &anode))
+		return rc;
+
+	rc = mv_pp3_tm_meter_set(TM_A_LEVEL, anode, meter);
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
+/* Supported for EMAC virtual ports only */
+int mv_pp3_egress_emac_shaper_set(int emac, struct mv_nss_meter *meter)
+{
+	int rc, pnode;
+
+	pnode = TM_A0_PORT_EMAC0 + emac;
+	rc = mv_pp3_tm_meter_set(TM_P_LEVEL, pnode, meter);
+	if (rc)
+		return rc;
+
+	return 0;
+}
 
 int mv_pp3_nss_drain(struct mv_pp3 *priv)
 {
@@ -678,7 +800,8 @@ int mv_pp3_shared_start(struct mv_pp3 *priv)
 	}
 
 #ifdef CONFIG_MV_PP3_TM_SUPPORT
-	tm_cfg1();
+	if (tm_cfg1())
+		return -1;
 #endif /* CONFIG_MV_PP3_TM_SUPPORT */
 
 	/* Create default DP curve */
@@ -751,6 +874,13 @@ int mv_pp3_shared_start(struct mv_pp3 *priv)
 			return -1;
 
 	priv->initialized = true;
+
+	/* Set default ingress rate limit for ingress traffic via 10Gbps EMAC port */
+	mv_pp3_ingress_emac_rate_limit_set(0, &pp3_emac0_ingress_rate_limit);
+
+	/* Set default egress rate limit for traffic via group of devices: nss0, nss16-23 */
+	mv_pp3_dev_type_rate_limit_set(MV_PP3_DEV_NSS0, &pp3_dev_nss0_egress_rate_limit);
+	mv_pp3_dev_type_rate_limit_set(MV_PP3_DEV_NSS, &pp3_dev_nss_egress_rate_limit);
 
 	return 0;
 }

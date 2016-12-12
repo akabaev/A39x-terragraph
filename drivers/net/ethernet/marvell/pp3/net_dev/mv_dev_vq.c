@@ -732,7 +732,7 @@ int mv_pp3_dev_egress_vport_shaper_set(struct net_device *dev, struct mv_nss_met
 /* Set/init defaults for Queues and for Ports */
 int mv_pp3_dev_egress_vqs_defaults_set(struct net_device *dev)
 {
-	int vq, vqs_num, prio;
+	int vq, vqs_num, prio, vq_min_prio;
 	struct mv_nss_meter meter;
 	struct pp3_vport *emac_vp = NULL;
 	struct pp3_dev_priv *dev_priv = MV_PP3_PRIV(dev);
@@ -752,6 +752,11 @@ int mv_pp3_dev_egress_vqs_defaults_set(struct net_device *dev)
 	/* SGMII 2.5G: cir =  2500 Mbps, eir = 0 Mbps, cbs = 16 KBytes, ebs = 16 KBytes */
 	/* Others 1G : cir =  1000 Mbps, eir = 0 Mbps, cbs = 16 KBytes, ebs = 16 KBytes */
 	if (dev_priv->vport && (dev_priv->vport->type != MV_PP3_NSS_PORT_ETH)) {
+		if (dev_priv->id == MV_NSS_EXT_PORT_MAX)
+			vq_min_prio = NSS0_DEFAULT_PRIO_MIN;
+		else
+			vq_min_prio = NSS_DEFAULT_PRIO_MIN;
+
 		meter.cir = 2000;
 		meter.eir = 0;
 		meter.cbs = 16;
@@ -761,6 +766,7 @@ int mv_pp3_dev_egress_vqs_defaults_set(struct net_device *dev)
 		if (!emac_vp)
 			return -1;
 
+		vq_min_prio = NIC_DEFAULT_PRIO_MIN;
 		if (emac_vp->port.emac.port_mode == MV_PORT_RXAUI) {
 			meter.cir = 10000;
 			meter.eir = 0;
@@ -784,7 +790,7 @@ int mv_pp3_dev_egress_vqs_defaults_set(struct net_device *dev)
 
 	for (vq = 0; vq < vqs_num; vq++) {
 
-		prio = vq;
+		prio = vq_min_prio + vq;
 		if (prio >= MV_PP3_SCHED_PRIO_NUM)
 			prio = (MV_PP3_SCHED_PRIO_NUM - 1);
 
