@@ -61,7 +61,30 @@ static void mv_pp3_cfg_subtree_free(struct mv_pp3_tm_node *node);
 static void mv_pp3_port_subtree_print(struct mv_pp3_tm_node *node);
 #endif
 
+/* get interface Bnode base and nodes quantity */
+int mv_pp3_cfg_dp_tx_bnode_get(int if_num, int *bnum)
+{
+	int bnode, bnode_num;
 
+	if (if_num == MV_NSS_EXT_PORT_MAX) {
+		bnode = MV_PP3_HMAC_TO_PPC_NSS0_BNODE;
+		bnode_num = MV_PP3_HMAC_TO_PPC_NSS0_BNODE_NUM;
+	} else if ((if_num >= MV_NSS_EXT_PORT_MIN) && (if_num < MV_NSS_EXT_PORT_MAX)) {
+		bnode = MV_PP3_HMAC_TO_PPC_NSS_BNODE;
+		bnode_num = MV_PP3_HMAC_TO_PPC_NSS_BNODE_NUM;
+	} else if ((if_num >= MV_NSS_ETH_PORT_MIN) && (if_num <= MV_NSS_ETH_PORT_MAX)) {
+		bnode = MV_PP3_HMAC_TO_PPC_NIC_BNODE;
+		bnode_num = MV_PP3_HMAC_TO_PPC_NIC_BNODE_NUM;
+	} else {
+		pr_err("%s: Unknown Bnode for if_num = %d\n", __func__, if_num);
+		bnode = -1;
+		bnode_num = 0;
+	}
+	if (bnum)
+		*bnum = bnode_num;
+
+	return bnode;
+}
 
 int mv_pp3_cfg_rx_irq_get(int id, int irq_group)
 {
@@ -779,7 +802,7 @@ Outputs:
 int mv_pp3_cfg_dp_reserve_txq(int id, int if_num, int cpu, int q_num)
 {
 	struct mv_pp3_tm_node *cnode, *bnode, *anode;
-	int i, j;
+	int i, j, bnode_num, bnode_base;
 	int frame = 0;
 	int ind_arr[MV_PP3_HFRM_NUM];
 	bool found;
@@ -841,9 +864,11 @@ int mv_pp3_cfg_dp_reserve_txq(int id, int if_num, int cpu, int q_num)
 	}
 
 	found = false;
+	/* look for B node base assign to interface */
+	bnode_base = mv_pp3_cfg_dp_tx_bnode_get(if_num, &bnode_num);
 	/* look for first B node with free A nodes number >= q_num */
 	cnode = &mv_pp3_cfg_clients_info[PP3_PPC0_DP].port_nodes;
-	for (i = 0; (i < cnode->num_of_ch); i++) {
+	for (i = bnode_base; (i < bnode_base + bnode_num); i++) {
 		bnode = &cnode->sub_nodes[i];
 		if (bnode->first_q >= MV_PP3_HMAC_TO_PPC_QUEUE_BASE + 4) {
 			for (j = 0; j < bnode->num_of_ch; j++) {

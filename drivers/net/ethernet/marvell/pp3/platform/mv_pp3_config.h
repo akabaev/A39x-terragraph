@@ -24,6 +24,15 @@
 
 #define MV_PP3_MSG_BUFF_SIZE	4096
 
+#define MV_PP3_HMAC_TO_PPC_NSS0_BNODE		(3)
+#define MV_PP3_HMAC_TO_PPC_NSS0_BNODE_NUM	(1)
+
+#define MV_PP3_HMAC_TO_PPC_NIC_BNODE		(4)
+#define MV_PP3_HMAC_TO_PPC_NIC_BNODE_NUM	(2)
+
+#define MV_PP3_HMAC_TO_PPC_NSS_BNODE		(6)
+#define MV_PP3_HMAC_TO_PPC_NSS_BNODE_NUM	(2)
+
 #define MV_PP3_HMAC_TO_PPC_QUEUE_BASE	(44)
 #define MV_PP3_HMAC_MSG_FRAME		(3)
 
@@ -87,7 +96,7 @@ int mv_pp3_cfg_hmac_tx_anode_get(int hwq_base, int *anode_num);
 int mv_pp3_cfg_emac_anode_get(int emac, int hwq_base, int *anode_num);
 int mv_pp3_cfg_hmac_pnode_get(enum mv_pp3_cfg_clients client);
 int mv_pp3_cfg_rx_bp_node_get(int hwq_base, int *node_type, int *node_num);
-void mv_pp3_rx_hwq_alloc_mode_change(enum mv_hwq_alloc_mode mode);
+int mv_pp3_cfg_dp_tx_bnode_get(int if_num, int *num_bnodes);
 
 /* get ingress virtual queues mapping array
 Outputs:
