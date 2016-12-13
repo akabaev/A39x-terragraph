@@ -46,6 +46,31 @@ enum mv_tm_config mv_active_config;
 void __iomem *tm_regs_base;
 const char *tm_prod_str;
 
+const char *mv_tm_level_str(enum mv_tm_level level)
+{
+	const char *str;
+
+	switch (level) {
+	case TM_Q_LEVEL:
+		str = "Queue";
+		break;
+	case TM_A_LEVEL:
+		str = "Anode";
+		break;
+	case TM_B_LEVEL:
+		str = "Bnode";
+		break;
+	case TM_C_LEVEL:
+		str = "Cnode";
+		break;
+	case TM_P_LEVEL:
+		str = "Port";
+		break;
+	default:
+		str = "Unknown";
+	}
+	return str;
+}
 
 static const char *tm_config_str(enum mv_tm_config config)
 {

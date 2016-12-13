@@ -38,32 +38,6 @@ disclaimer.
 
 uint8_t tm_debug_on;
 
-const char *tm_sysfs_level_str(int level)
-{
-	const char *str;
-
-	switch (level) {
-	case Q_LEVEL:
-		str = "Queue";
-		break;
-	case A_LEVEL:
-		str = "Anode";
-		break;
-	case B_LEVEL:
-		str = "Bnode";
-		break;
-	case C_LEVEL:
-		str = "Cnode";
-		break;
-	case P_LEVEL:
-		str = "Port";
-		break;
-	default:
-		str = "Unknown";
-	}
-	return str;
-}
-
 int tm_sysfs_enable_debug(uint8_t en)
 {
 	TM_WRAPPER_BEGIN(qmtm_hndl, ctl, henv);

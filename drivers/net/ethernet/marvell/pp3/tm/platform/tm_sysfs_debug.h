@@ -49,6 +49,4 @@ int tm_sysfs_set_elig_per_queue_range(uint32_t startInd, uint32_t endInd, uint8_
 
 int tm_sysfs_show_elig_func(int level, uint32_t index);
 
-const char *tm_sysfs_level_str(int level);
-
 #endif /* TM_DEBUG_SYSFS__H */

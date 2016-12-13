@@ -26,6 +26,9 @@ DISCLAIMED.  The GPL License provides additional details about this warranty
 disclaimer.
 *******************************************************************************/
 
+#include "common/mv_hw_if.h"
+#include "platform/mv_pp3.h"
+
 #include "tm_sysfs_debug.h"
 #include "tm_sysfs_drop.h"
 #include "tm_sysfs_shaping.h"
@@ -160,7 +163,7 @@ static ssize_t mv_tm_config(struct device *dev,
 			PR_ERR_CODE(err)
 
 		if (!mv_tm_scheme_parent_node_get(level, index, &parent))
-			pr_info("Parent node is: %s #%d\n", tm_sysfs_level_str(level + 1), parent);
+			pr_info("Parent node is: %s #%d\n", mv_tm_level_str(level + 1), parent);
 	} else if (!strcmp(name, "node_show_hw")) {
 		fields = sscanf(buf, "%d %u", &level, &index);
 		err = (fields != 2) ? 1 : 0;

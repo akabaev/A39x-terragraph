@@ -30,7 +30,6 @@ disclaimer.
 #define MV_TM__H
 
 #include "common/mv_sw_if.h"
-#include "platform/mv_pp3.h"
 #include "tm_to_qmtm_enums.h"
 
 /* Ports Numbers */
@@ -166,5 +165,6 @@ int mv_pp3_tm_sysfs_init(struct kobject *pp3_kobj);
  */
 int mv_pp3_tm_sysfs_exit(struct kobject *hmac_kobj);
 
+const char *mv_tm_level_str(enum mv_tm_level);
 
 #endif /* MV_TM__H */
