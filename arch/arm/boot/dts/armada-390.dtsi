@@ -55,6 +55,11 @@
 				compatible = "marvell,mv88f6920-pinctrl";
 				reg = <0x18000 0x20>;
 			};
+
+			rtc@a3800 {
+				/* RTC is supported on ARMADA 395 and 398 only */
+				status = "disabled";
+			};
 		};
 	};
 };
